@@ -8,12 +8,13 @@ license: "LGPL-2.1"
 homepage: "https://github.com/ocamlpro/ezjs_idb"
 bug-reports: "https://github.com/ocamlpro/ezjs_idb/issues"
 depends: [
+  "dune" {>= "2.8"}
   "ocaml" {>= "4.05"}
-  "dune" {>= "2.0"}
-  "ezjs_min" {>= "0.2"}
+  "ezjs_min" {>= "0.2.2"}
+  "odoc" {with-doc}
 ]
 build: [
-  ["dune" "subst"] {pinned}
+  ["dune" "subst"] {dev}
   [
     "dune"
     "build"

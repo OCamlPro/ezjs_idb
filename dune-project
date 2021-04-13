@@ -1,4 +1,4 @@
-(lang dune 2.0)
+(lang dune 2.8)
 
 (name ezjs_idb)
 
@@ -19,5 +19,4 @@
  (description "Bindings for IndexedDB")
  (depends
   (ocaml (>= 4.05))
-  (dune (>= 2.0))
-  (ezjs_min (>= 0.2))))
+  (ezjs_min (>= 0.2.2))))

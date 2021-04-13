@@ -38,16 +38,16 @@ let result r = r##.result
 let wrap ?error ?callback r =
   try
     let r = Lazy.force r in
-    r##.onsuccess := AOpt.aopt (fun f -> wrap_meth_callback (fun r _e -> f (result r))) callback;
-    r##.onerror := AOpt.aopt (fun f -> wrap_meth_callback (fun r _e -> f r)) error
+    r##.onsuccess := AOpt.aopt (fun f -> wrap_callback (fun _e -> f (result r))) callback;
+    r##.onerror := AOpt.aopt (fun f -> wrap_callback (fun _e -> f r)) error
   with exn ->
     match error with None -> raise exn | Some f -> catch_exn (fun e -> f (Unsafe.coerce e)) exn
 
 let wrapf ?error ?callback g r =
   try
     let r = Lazy.force r in
-    r##.onsuccess := AOpt.aopt (fun f -> wrap_meth_callback (fun r _e -> f (g @@ result r))) callback;
-    r##.onerror := AOpt.aopt (fun f -> wrap_meth_callback (fun r _e -> f r)) error
+    r##.onsuccess := AOpt.aopt (fun f -> wrap_callback (fun _e -> f (g @@ result r))) callback;
+    r##.onerror := AOpt.aopt (fun f -> wrap_callback (fun _e -> f r)) error
   with exn ->
     match error with None -> raise exn | Some f -> catch_exn (fun e -> f (Unsafe.coerce e)) exn
 
@@ -60,13 +60,14 @@ let openDB ?upgrade ?error ?version name callback =
   let indexedDB : _ iDBFactory t = Unsafe.variable "window.indexedDB" in
   let r = lazy (indexedDB##_open (string name) (AOpt.option version)) in
   wrap ?error ~callback r;
-  (Lazy.force r)##.onupgradeneeded :=
-    AOpt.aopt (fun u -> wrap_meth_callback (fun r e ->
+  let r = Lazy.force r in
+  r##.onupgradeneeded :=
+    AOpt.aopt (fun u -> wrap_callback (fun e ->
         let v = db_upgrade_event e in
         let db = result r in
         u db v)) upgrade
 
-let transaction r : _ iDBTransaction t = r##.transaction
+let transaction r : iDBTransaction t = r##.transaction
 
 let create_db_options {key_path; auto_increment} : create_db_options t = object%js
   val keyPath = AOpt.aopt string key_path
@@ -117,9 +118,13 @@ module Store(K : Tr_sig)(D : Tr_sig) = struct
     | Some (K k) -> wrap ~callback ?error @@ lazy (st##count (AOpt.def (K.to_js k)))
     | Some (KR r) -> wrap ~callback ?error @@ lazy (st##count_range (AOpt.def r))
 
-  let get ?error (st : (K.js, D.js) iDBObjectStore t) (callback : D.t -> unit) = function
-    | K key -> wrapf ~callback ?error D.of_js @@ lazy (st##get (K.to_js key))
-    | KR range -> wrapf ~callback ?error D.of_js @@ lazy (st##get_range range)
+  let get ?error (st : (K.js, D.js) iDBObjectStore t) (callback : D.t option -> unit) k =
+    let of_js js = match AOpt.to_option js with
+      | None -> None
+      | Some js -> Some (D.of_js js) in
+    match k with
+    | K key -> wrapf ~callback ?error of_js @@ lazy (st##get (K.to_js key))
+    | KR range -> wrapf ~callback ?error of_js @@ lazy (st##get_range range)
 
   let get_all ?error ?key ?count (st : (K.js, D.js) iDBObjectStore t) (callback : D.t list -> unit) =
     match key with
@@ -127,9 +132,13 @@ module Store(K : Tr_sig)(D : Tr_sig) = struct
     | Some (K k) -> wrapf ~callback ?error (to_listf D.of_js) @@ lazy (st##getAll (AOpt.def (K.to_js k)) (AOpt.option count))
     | Some (KR r) -> wrapf ~callback ?error (to_listf D.of_js) @@ lazy (st##getAll_range (AOpt.def r) (AOpt.option count))
 
-  let get_key ?error (st : (K.js, _) iDBObjectStore t) (callback : K.t -> unit) = function
-    | K key -> wrapf ~callback ?error K.of_js @@ lazy (st##getKey (K.to_js key))
-    | KR range -> wrapf ~callback ?error K.of_js @@ lazy (st##getKey_range range)
+  let get_key ?error (st : (K.js, _) iDBObjectStore t) (callback : K.t option -> unit) k =
+    let of_js js = match AOpt.to_option js with
+      | None -> None
+      | Some js -> Some (K.of_js js) in
+    match k with
+    | K key -> wrapf ~callback ?error of_js @@ lazy (st##getKey (K.to_js key))
+    | KR range -> wrapf ~callback ?error of_js @@ lazy (st##getKey_range range)
 
   let get_all_keys ?error ?key ?count (st : (K.js, _) iDBObjectStore t) (callback : K.t list -> unit) =
     match key with
@@ -220,7 +229,7 @@ module Store(K : Tr_sig)(D : Tr_sig) = struct
       lazy (st##openKeyCursor_range (AOpt.def r) (AOpt.aopt str_of_direction direction))
 
   let clear ?error ?callback (st : (K.js, D.js) iDBObjectStore t) =
-    wrap ?callback ?error @@ lazy st##clear
+    wrapf ?callback ?error (fun _ -> ()) @@ lazy st##clear
 
   let create_index_options {unique; multi_entry; locale} : create_index_options t = object%js
     val unique = AOpt.aopt bool unique
