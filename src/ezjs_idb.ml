@@ -35,21 +35,25 @@ let indexedDB : js_string t iDBFactory t = Unsafe.variable "window.indexedDB"
 
 let result r = r##.result
 
+let catch exn = function
+  | None -> raise exn
+  | Some f -> catch_exn (fun e -> f (Unsafe.coerce e)) exn
+
 let wrap ?error ?callback r =
   try
     let r = Lazy.force r in
-    r##.onsuccess := AOpt.aopt (fun f -> wrap_callback (fun _e -> f (result r))) callback;
+    r##.onsuccess := AOpt.aopt (fun f -> wrap_callback (fun _e ->
+        try f (result r) with exn -> catch exn error)) callback;
     r##.onerror := AOpt.aopt (fun f -> wrap_callback (fun _e -> f r)) error
-  with exn ->
-    match error with None -> raise exn | Some f -> catch_exn (fun e -> f (Unsafe.coerce e)) exn
+  with exn -> catch exn error
 
 let wrapf ?error ?callback g r =
   try
     let r = Lazy.force r in
-    r##.onsuccess := AOpt.aopt (fun f -> wrap_callback (fun _e -> f (g @@ result r))) callback;
+    r##.onsuccess := AOpt.aopt (fun f -> wrap_callback (fun _e ->
+        try f (g @@ result r) with exn -> catch exn error)) callback;
     r##.onerror := AOpt.aopt (fun f -> wrap_callback (fun _e -> f r)) error
-  with exn ->
-    match error with None -> raise exn | Some f -> catch_exn (fun e -> f (Unsafe.coerce e)) exn
+  with exn -> catch exn error
 
 let db_upgrade_event (e : iDBVersionChangeEvent t) = {
   old_version = e##.oldVersion;
