@@ -82,9 +82,15 @@ let create_store ?options (db : iDBDatabase t) name =
   Unsafe.coerce @@
   db##createObjectStore (string name) (AOpt.aopt create_db_options options)
 
-let get_store ?mode (db : iDBDatabase t) name : (_, _) iDBObjectStore t =
-  let tr = db##transaction (array [| string name |]) (AOpt.aopt str_of_mode mode) in
-  Unsafe.coerce @@ tr##objectStore (string name)
+let create_transaction ?mode (db : iDBDatabase t) names =
+  let names = of_listf string names in
+  db##transaction names (AOpt.aopt str_of_mode mode)
+
+let get_store ?mode ?tx (db : iDBDatabase t) name : (_, _) iDBObjectStore t =
+  let tx = match tx with
+    | None -> create_transaction ?mode db [ name ]
+    | Some tx -> tx in
+  Unsafe.coerce @@ tx##objectStore (string name)
 
 module type S = sig
   module K : Tr_sig
@@ -94,7 +100,7 @@ module type S = sig
   val name : unit -> string
   val set_name : string -> unit
   val create : ?options:db_options -> ?name:string -> iDBDatabase t -> store
-  val store : ?mode:mode -> ?name:string -> iDBDatabase t -> store
+  val store : ?mode:mode -> ?tx:iDBTransaction t -> ?name:string -> iDBDatabase t -> store
   val add : ?callback:(K.t -> unit) -> ?error:(K.js iDBRequest t -> unit) -> ?key:K.t -> store -> D.t -> unit
   val put : ?callback:(D.t -> unit) -> ?error:(D.js iDBRequest t -> unit) -> ?key:K.t -> store -> D.t -> unit
   val range : ?olower:bool -> ?oupper:bool -> ?lower:K.t -> ?upper:K.t -> unit -> keys
@@ -129,8 +135,8 @@ module Store(K : Tr_sig)(D : Tr_sig) : S with
   let create ?options ?(name= !name) db : store =
     create_store ?options db name
 
-  let store ?mode ?(name= !name) db : store =
-    get_store ?mode db name
+  let store ?mode ?tx ?(name= !name) db : store =
+    get_store ?mode ?tx db name
 
   let add ?callback ?error ?key (st : store) (x : D.t) =
     wrapf ?callback ?error K.of_js @@ lazy (st##add (D.to_js x) (AOpt.aopt K.to_js key))
