@@ -91,8 +91,10 @@ module type S = sig
   module D : Tr_sig
   type store = (K.js, D.js) iDBObjectStore t
   type keys = K of K.t | KR of K.js iDBKeyRange t
-  val create : ?options:db_options -> iDBDatabase t -> string -> store
-  val store : ?mode:mode -> iDBDatabase t -> string -> store
+  val name : unit -> string
+  val set_name : string -> unit
+  val create : ?options:db_options -> ?name:string -> iDBDatabase t -> store
+  val store : ?mode:mode -> ?name:string -> iDBDatabase t -> store
   val add : ?callback:(K.t -> unit) -> ?error:(K.js iDBRequest t -> unit) -> ?key:K.t -> store -> D.t -> unit
   val put : ?callback:(D.t -> unit) -> ?error:(D.js iDBRequest t -> unit) -> ?key:K.t -> store -> D.t -> unit
   val range : ?olower:bool -> ?oupper:bool -> ?lower:K.t -> ?upper:K.t -> unit -> keys
@@ -119,10 +121,13 @@ module Store(K : Tr_sig)(D : Tr_sig) : S = struct
   type store = (K.js, D.js) iDBObjectStore t
   type keys = K of K.t | KR of K.js iDBKeyRange t
 
-  let create ?options db name : store =
+  let name = ref "store"
+  let set_name s = name := s
+
+  let create ?options ?(name= !name) db : store =
     create_store ?options db name
 
-  let store ?mode db name : store =
+  let store ?mode ?(name= !name) db : store =
     get_store ?mode db name
 
   let add ?callback ?error ?key (st : store) (x : D.t) =
@@ -279,6 +284,7 @@ module Store(K : Tr_sig)(D : Tr_sig) : S = struct
   let get_index (st : (K.js, D.js) iDBObjectStore t) name =
     st##index (string name)
 
+  let name () = !name
 end
 
 module NoTr(S : sig type t end) : Tr_sig with type t = S.t and type js = S.t = struct
