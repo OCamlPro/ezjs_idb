@@ -115,7 +115,9 @@ module type S = sig
   val get_index : store -> string -> (K.js, D.js) iDBIndex t
 end
 
-module Store(K : Tr_sig)(D : Tr_sig) : S = struct
+module Store(K : Tr_sig)(D : Tr_sig) : S with
+  type K.js = K.js and type K.t = K.t and type D.js = D.js and type D.t = D.t
+= struct
   module K = K
   module D = D
   type store = (K.js, D.js) iDBObjectStore t
