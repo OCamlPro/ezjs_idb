@@ -86,8 +86,36 @@ let get_store ?mode (db : iDBDatabase t) name : (_, _) iDBObjectStore t =
   let tr = db##transaction (array [| string name |]) (AOpt.aopt str_of_mode mode) in
   Unsafe.coerce @@ tr##objectStore (string name)
 
-module Store(K : Tr_sig)(D : Tr_sig) = struct
+module type S = sig
+  module K : Tr_sig
+  module D : Tr_sig
+  type store = (K.js, D.js) iDBObjectStore t
+  type keys = K of K.t | KR of K.js iDBKeyRange t
+  val create : ?options:db_options -> iDBDatabase t -> string -> store
+  val store : ?mode:mode -> iDBDatabase t -> string -> store
+  val add : ?callback:(K.t -> unit) -> ?error:(K.js iDBRequest t -> unit) -> ?key:K.t -> store -> D.t -> unit
+  val put : ?callback:(D.t -> unit) -> ?error:(D.js iDBRequest t -> unit) -> ?key:K.t -> store -> D.t -> unit
+  val range : ?olower:bool -> ?oupper:bool -> ?lower:K.t -> ?upper:K.t -> unit -> keys
+  val count : ?error:(int iDBRequest t -> unit) -> ?key:keys -> store -> (int -> unit) -> unit
+  val get : ?error:(D.js aopt iDBRequest t -> unit) -> store -> (D.t option -> unit) -> keys -> unit
+  val get_all : ?error:(D.js js_array t iDBRequest t -> unit) -> ?key:keys -> ?count:int -> store -> (D.t list -> unit) -> unit
+  val get_key : ?error:(K.js aopt iDBRequest t -> unit) -> store -> (K.t option -> unit) -> keys -> unit
+  val get_all_keys : ?error:(K.js js_array t iDBRequest t -> unit) -> ?key:keys -> ?count:int -> store -> (K.t list -> unit) -> unit
+  val delete : ?callback:(unit option -> unit) -> ?error:(unit aopt iDBRequest t -> unit) -> store -> keys -> unit
+  val iter : ?error:((K.js, D.js) iDBCursorWithValue t aopt iDBRequest t -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> D.t -> unit) -> unit
+  val fold : ?error:((K.js, D.js) iDBCursorWithValue t aopt iDBRequest t -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> D.t -> 'a -> 'a) -> 'a -> ('a -> unit) -> unit
+  val iter_keys : ?error:((K.js, K.js) iDBCursor t aopt iDBRequest t -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> unit) -> unit
+  val fold_keys : ?error:((K.js, K.js) iDBCursor t aopt iDBRequest t -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> 'a -> 'a) -> 'a -> ('a -> unit) -> unit
+  val clear : ?error:(unit aopt iDBRequest t -> unit) -> ?callback:(unit -> unit) -> store -> unit
+  val create_index_options : index_options -> create_index_options t
+  val create_index : ?options:index_options -> name:string -> key_path:string -> store -> (K.js, D.js) iDBIndex t
+  val delete_index : store -> string -> unit
+  val get_index : store -> string -> (K.js, D.js) iDBIndex t
+end
 
+module Store(K : Tr_sig)(D : Tr_sig) : S = struct
+  module K = K
+  module D = D
   type store = (K.js, D.js) iDBObjectStore t
   type keys = K of K.t | KR of K.js iDBKeyRange t
 
@@ -101,7 +129,7 @@ module Store(K : Tr_sig)(D : Tr_sig) = struct
     wrapf ?callback ?error K.of_js @@ lazy (st##add (D.to_js x) (AOpt.aopt K.to_js key))
 
   let put ?callback ?error ?key (st : store) (x : D.t) =
-    wrap ?callback ?error @@ lazy (st##put (D.to_js x) (AOpt.aopt K.to_js key))
+    wrapf ?callback ?error D.of_js @@ lazy (st##put (D.to_js x) (AOpt.aopt K.to_js key))
 
   let range ?olower ?oupper ?lower ?upper () =
     let iDBKeyRange : K.js iDBKeyRange t = Unsafe.variable "IDBKeyRange" in
@@ -151,8 +179,8 @@ module Store(K : Tr_sig)(D : Tr_sig) = struct
     | Some (KR r) -> wrapf ~callback ?error (to_listf K.of_js) @@ lazy (st##getAllKeys_range (AOpt.def r) (AOpt.option count))
 
   let delete ?callback ?error (st : (K.js, _) iDBObjectStore t) = function
-    | K key -> wrap ?error ?callback @@ lazy (st##delete (K.to_js key))
-    | KR range -> wrap ?error ?callback @@ lazy (st##delete_range range)
+    | K key -> wrapf ?error ?callback AOpt.to_option @@ lazy (st##delete (K.to_js key))
+    | KR range -> wrapf ?error ?callback AOpt.to_option @@ lazy (st##delete_range range)
 
   let iter ?error ?key ?direction (st : (K.js, D.js) iDBObjectStore t)
       (f : K.t -> D.t -> unit) =
@@ -241,7 +269,7 @@ module Store(K : Tr_sig)(D : Tr_sig) = struct
     val locale = AOpt.aopt bool locale
   end
 
-  let create_index ?options (st : (K.js, D.js) iDBObjectStore t) name key_path =
+  let create_index ?options ~name ~key_path (st : (K.js, D.js) iDBObjectStore t) =
     let options = AOpt.aopt create_index_options options in
     st##createIndex (string name) (string key_path) options
 
