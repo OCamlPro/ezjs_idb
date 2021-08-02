@@ -37,14 +37,14 @@ let result r = r##.result
 
 let catch exn = function
   | None -> raise exn
-  | Some f -> catch_exn (fun e -> f (Unsafe.coerce e)) exn
+  | Some f -> catch_exn (fun e -> f (AOpt.def (Unsafe.coerce e))) exn
 
-let wrap ?error ?callback r =
+let wrap ?error ?callback (r : _ iDBRequest t Lazy.t) =
   try
     let r = Lazy.force r in
     r##.onsuccess := AOpt.aopt (fun f -> wrap_callback (fun _e ->
         try f (result r) with exn -> catch exn error)) callback;
-    r##.onerror := AOpt.aopt (fun f -> wrap_callback (fun _e -> f r)) error
+    r##.onerror := AOpt.aopt (fun f -> wrap_callback (fun _e -> f r##.error)) error
   with exn -> catch exn error
 
 let wrapf ?error ?callback g r =
@@ -52,7 +52,7 @@ let wrapf ?error ?callback g r =
     let r = Lazy.force r in
     r##.onsuccess := AOpt.aopt (fun f -> wrap_callback (fun _e ->
         try f (g @@ result r) with exn -> catch exn error)) callback;
-    r##.onerror := AOpt.aopt (fun f -> wrap_callback (fun _e -> f r)) error
+    r##.onerror := AOpt.aopt (fun f -> wrap_callback (fun _e -> f r##.error)) error
   with exn -> catch exn error
 
 let db_upgrade_event (e : iDBVersionChangeEvent t) = {
@@ -63,7 +63,7 @@ let db_upgrade_event (e : iDBVersionChangeEvent t) = {
 let openDB ?upgrade ?error ?version name callback =
   let indexedDB : _ iDBFactory t = Unsafe.variable "window.indexedDB" in
   let r = lazy (indexedDB##_open (string name) (AOpt.option version)) in
-  wrap ?error ~callback r;
+  wrap ?error ~callback (r :> _ iDBRequest t Lazy.t);
   let r = Lazy.force r in
   r##.onupgradeneeded :=
     AOpt.aopt (fun u -> wrap_callback (fun e ->
@@ -101,20 +101,20 @@ module type S = sig
   val set_name : string -> unit
   val create : ?options:db_options -> ?name:string -> iDBDatabase t -> store
   val store : ?mode:mode -> ?tx:iDBTransaction t -> ?name:string -> iDBDatabase t -> store
-  val add : ?callback:(K.t -> unit) -> ?error:(K.js iDBRequest t -> unit) -> ?key:K.t -> store -> D.t -> unit
-  val put : ?callback:(K.t -> unit) -> ?error:(K.js iDBRequest t -> unit) -> ?key:K.t -> store -> D.t -> unit
+  val add : ?callback:(K.t -> unit) -> ?error:(domException t aopt -> unit) -> ?key:K.t -> store -> D.t -> unit
+  val put : ?callback:(K.t -> unit) -> ?error:(domException t aopt -> unit) -> ?key:K.t -> store -> D.t -> unit
   val range : ?olower:bool -> ?oupper:bool -> ?lower:K.t -> ?upper:K.t -> unit -> keys
-  val count : ?error:(int iDBRequest t -> unit) -> ?key:keys -> store -> (int -> unit) -> unit
-  val get : ?error:(D.js aopt iDBRequest t -> unit) -> store -> (D.t option -> unit) -> keys -> unit
-  val get_all : ?error:(D.js js_array t iDBRequest t -> unit) -> ?key:keys -> ?count:int -> store -> (D.t list -> unit) -> unit
-  val get_key : ?error:(K.js aopt iDBRequest t -> unit) -> store -> (K.t option -> unit) -> keys -> unit
-  val get_all_keys : ?error:(K.js js_array t iDBRequest t -> unit) -> ?key:keys -> ?count:int -> store -> (K.t list -> unit) -> unit
-  val delete : ?callback:(unit option -> unit) -> ?error:(unit aopt iDBRequest t -> unit) -> store -> keys -> unit
-  val iter : ?error:((K.js, D.js) iDBCursorWithValue t aopt iDBRequest t -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> D.t -> unit) -> unit
-  val fold : ?error:((K.js, D.js) iDBCursorWithValue t aopt iDBRequest t -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> D.t -> 'a -> 'a) -> 'a -> ('a -> unit) -> unit
-  val iter_keys : ?error:((K.js, K.js) iDBCursor t aopt iDBRequest t -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> unit) -> unit
-  val fold_keys : ?error:((K.js, K.js) iDBCursor t aopt iDBRequest t -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> 'a -> 'a) -> 'a -> ('a -> unit) -> unit
-  val clear : ?error:(unit aopt iDBRequest t -> unit) -> ?callback:(unit -> unit) -> store -> unit
+  val count : ?error:(domException t aopt -> unit) -> ?key:keys -> store -> (int -> unit) -> unit
+  val get : ?error:(domException t aopt -> unit) -> store -> (D.t option -> unit) -> keys -> unit
+  val get_all : ?error:(domException t aopt -> unit) -> ?key:keys -> ?count:int -> store -> (D.t list -> unit) -> unit
+  val get_key : ?error:(domException t aopt -> unit) -> store -> (K.t option -> unit) -> keys -> unit
+  val get_all_keys : ?error:(domException t aopt -> unit) -> ?key:keys -> ?count:int -> store -> (K.t list -> unit) -> unit
+  val delete : ?callback:(unit option -> unit) -> ?error:(domException t aopt -> unit) -> store -> keys -> unit
+  val iter : ?error:(domException t aopt -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> D.t -> unit) -> unit
+  val fold : ?error:(domException t aopt -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> D.t -> 'a -> 'a) -> 'a -> ('a -> unit) -> unit
+  val iter_keys : ?error:(domException t aopt -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> unit) -> unit
+  val fold_keys : ?error:(domException t aopt -> unit) -> ?key:keys -> ?direction:direction -> store -> (K.t -> 'a -> 'a) -> 'a -> ('a -> unit) -> unit
+  val clear : ?error:(domException t aopt -> unit) -> ?callback:(unit -> unit) -> store -> unit
   val create_index_options : index_options -> create_index_options t
   val create_index : ?options:index_options -> name:string -> key_path:string -> store -> (K.js, D.js) iDBIndex t
   val delete_index : store -> string -> unit
