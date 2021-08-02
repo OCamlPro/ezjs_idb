@@ -102,7 +102,7 @@ module type S = sig
   val create : ?options:db_options -> ?name:string -> iDBDatabase t -> store
   val store : ?mode:mode -> ?tx:iDBTransaction t -> ?name:string -> iDBDatabase t -> store
   val add : ?callback:(K.t -> unit) -> ?error:(K.js iDBRequest t -> unit) -> ?key:K.t -> store -> D.t -> unit
-  val put : ?callback:(D.t -> unit) -> ?error:(D.js iDBRequest t -> unit) -> ?key:K.t -> store -> D.t -> unit
+  val put : ?callback:(K.t -> unit) -> ?error:(K.js iDBRequest t -> unit) -> ?key:K.t -> store -> D.t -> unit
   val range : ?olower:bool -> ?oupper:bool -> ?lower:K.t -> ?upper:K.t -> unit -> keys
   val count : ?error:(int iDBRequest t -> unit) -> ?key:keys -> store -> (int -> unit) -> unit
   val get : ?error:(D.js aopt iDBRequest t -> unit) -> store -> (D.t option -> unit) -> keys -> unit
@@ -142,7 +142,7 @@ module Store(K : Tr_sig)(D : Tr_sig) : S with
     wrapf ?callback ?error K.of_js @@ lazy (st##add (D.to_js x) (AOpt.aopt K.to_js key))
 
   let put ?callback ?error ?key (st : store) (x : D.t) =
-    wrapf ?callback ?error D.of_js @@ lazy (st##put (D.to_js x) (AOpt.aopt K.to_js key))
+    wrapf ?callback ?error K.of_js @@ lazy (st##put (D.to_js x) (AOpt.aopt K.to_js key))
 
   let range ?olower ?oupper ?lower ?upper () =
     let iDBKeyRange : K.js iDBKeyRange t = Unsafe.variable "IDBKeyRange" in

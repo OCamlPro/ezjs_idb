@@ -142,7 +142,7 @@ class type ['key, 'data] iDBObjectStore = object
   method openCursor_range : 'key iDBKeyRange t aopt -> js_string t aopt -> ('key, 'data) iDBCursorWithValue t aopt iDBRequest t meth
   method openKeyCursor : 'key aopt -> js_string t aopt -> ('key, 'key) iDBCursor t aopt iDBRequest t meth
   method openKeyCursor_range : 'key iDBKeyRange t aopt -> js_string t aopt -> ('key, 'key) iDBCursor t aopt iDBRequest t meth
-  method put : 'data -> 'key aopt -> 'data iDBRequest t meth
+  method put : 'data -> 'key aopt -> 'key iDBRequest t meth
 end
 
 class type iDBDatabase = object
