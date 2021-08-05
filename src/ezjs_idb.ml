@@ -30,9 +30,6 @@ let str_of_direction = function
   | NEXTUNIQUE -> string "nextunique"
   | PREVUNIQUE -> string "prevunique"
 
-let iDBKeyRange : Unsafe.any iDBKeyRange t = Unsafe.variable "IDBKeyRange"
-let indexedDB : js_string t iDBFactory t = Unsafe.variable "window.indexedDB"
-
 let result r = r##.result
 
 let catch exn = function
