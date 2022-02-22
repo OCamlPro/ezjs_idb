@@ -58,7 +58,7 @@ let db_upgrade_event (e : iDBVersionChangeEvent t) = {
 }
 
 let openDB ?upgrade ?error ?version name callback =
-  let indexedDB : _ iDBFactory t = Unsafe.variable "window.indexedDB" in
+  let indexedDB : _ iDBFactory t = Unsafe.pure_js_expr "window.indexedDB" in
   let r = lazy (indexedDB##_open (string name) (AOpt.option version)) in
   wrap ?error ~callback (r :> _ iDBRequest t Lazy.t);
   let r = Lazy.force r in
@@ -142,7 +142,7 @@ module Store(K : Tr_sig)(D : Tr_sig) : S with
     wrapf ?callback ?error K.of_js @@ lazy (st##put (D.to_js x) (AOpt.aopt K.to_js key))
 
   let range ?olower ?oupper ?lower ?upper () =
-    let iDBKeyRange : K.js iDBKeyRange t = Unsafe.variable "IDBKeyRange" in
+    let iDBKeyRange : K.js iDBKeyRange t = Unsafe.pure_js_expr "IDBKeyRange" in
     match lower, upper with
     | None, None -> assert false
     | Some lower, None ->
